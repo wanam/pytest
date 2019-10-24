@@ -2,6 +2,7 @@
 per-test stdout/stderr capturing mechanism.
 
 """
+import atexit
 import collections
 import contextlib
 import io
@@ -564,6 +565,7 @@ class FDCaptureBinary:
                     self.syscapture = NoCapture()
             self.tmpfile = tmpfile
             self.tmpfile_fd = tmpfile.fileno()
+            atexit.register(_close_capture_file, self.tmpfile)
 
     def __repr__(self):
         return "<FDCapture {} oldfd={} _state={!r}>".format(
@@ -594,7 +596,6 @@ class FDCaptureBinary:
         os.dup2(targetfd_save, self.targetfd)
         os.close(targetfd_save)
         self.syscapture.done()
-        self.tmpfile.close()
         self._state = "done"
 
     def suspend(self):
@@ -646,6 +647,7 @@ class SysCapture:
             else:
                 tmpfile = CaptureIO()
         self.tmpfile = tmpfile
+        atexit.register(_close_capture_file, self.tmpfile)
 
     def __repr__(self):
         return "<SysCapture {} _old={!r}, tmpfile={!r} _state={!r}>".format(
@@ -665,7 +667,6 @@ class SysCapture:
     def done(self):
         setattr(sys, self.name, self._old)
         del self._old
-        self.tmpfile.close()
         self._state = "done"
 
     def suspend(self):
@@ -823,3 +824,7 @@ def _py36_windowsconsoleio_workaround(stream):
     sys.stdin = _reopen_stdio(sys.stdin, "rb")
     sys.stdout = _reopen_stdio(sys.stdout, "wb")
     sys.stderr = _reopen_stdio(sys.stderr, "wb")
+
+
+def _close_capture_file(f):
+    f.close()
